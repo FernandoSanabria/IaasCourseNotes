@@ -1,0 +1,70 @@
+*** Azure IaaS
+
+
+az vm list
+
+az vm create -n UbuntuAkasha2 -g courseIaaS --image UbuntuLTS --authentication-type password --admin-username akasha --location  westus
+
+
+**** en UbuntuAkasha2 y luego para UbuntuAkasha
+
+ssh  akasha@40.78.0.57
+
+sudo !!
+
+sudo apt-get install apache2
+
+sudo systemctl status apache2
+
+
+az vm extension set --resource-group courseIaaS --vm-name UbuntuAkasha --name  CustomScript --publisher Microsoft.Azure.Extensions --settings ./script.json
+
+
+**** 
+
+az group create --name iaasBalancer --location eastus
+
+az network public-ip create --resource-group iaasBalancer --name ipIaaSBalancer
+
+az network lb create --resource-group iaasBalancer --name myLoadBalancer --frontend-ip-name myFrontEndPool --backend-pool-name myBackEndPool --public-ip-address ipIaaSBalancer
+
+az network lb probe create --resource-group iaasBalancer --lb-name myLoadBalancer --name myHealthProbe --protocol Tcp --port 80
+
+az network lb rule create --resource-group iaasBalancer --lb-name myLoadBalancer -n myLoadBalancerRule --protocol  Tcp --frontend-port 80 --backend-port 80 --frontend-ip-name myFrontEndPool --backend-pool myBackEndPool --probe-name myHealthProbe
+
+
+*Crear una red virtual.
+az network vnet create --resource-group iaasBalancer --name myVnet --subnet-name mySubnet
+
+
+*Crear un grupo de seguridad de red (NSG).
+az network nsg create --resource-group iaasBalancer --name  myNetworkSecurityGroup
+
+
+*Establecer una regla de entrada en el grupo de seguridad de red
+az network nsg rule create --resource-group iaasBalancer --nsg-name myNetworkSecurityGroup --name  myNetworkSecurityGroupRule --priority 1001 --protocol Tcp --destination-port-range 80
+
+
+*Crear 3 interfaces de red, una para cada máquina virtual
+for i in `seq 1 3`; do
+az network nic create --resource-group iaasBalancer --name myNic$i --vnet-name myVnet --subnet mySubnet --network-security-group myNetworkSecurityGroup --lb-name myLoadBalancer --lb-address-pools myBackEndPool
+
+
+az vm availability-set create --resource-group iaasBalancer --name  myAvailabilitySet
+
+
+
+*Obtener ip del balanceador de carga
+az network public-ip show --resource-group iaasBalancer --name ipIaaSBalancer --query [ipAddress] --output tsv 
+
+
+
+for i in `seq 1 3`; do az vm create --resource-group iaasBalancer --name myVM$i --ailability-set myAvailabilitySet --nics  myNic$i --image UbuntuLTS --admin-username akasha --generate-ssh-key --custom-data cloud-init.txt --no-wait ; done
+
+
+
+
+
+
+
+
